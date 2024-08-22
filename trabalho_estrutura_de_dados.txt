@@ -1,0 +1,170 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdbool.h>
+#include <time.h>
+
+#define DISPOSITIVOS 20 // Número total de dispositivos no grafo
+#define NOS_DE_CONEXAO 40 // Número de conexões a serem geradas
+
+typedef struct Vertice {
+    int id; // Identificador do dispositivo conectado
+    struct Vertice* prox; // Ponteiro para o próximo dispositivo conectado
+} Vertice;
+
+typedef struct {
+    Vertice* inicio; // Ponteiro para o início da lista de adjacência para um dispositivo
+} ListaDeAdjacencia;
+
+// Função para adicionar uma aresta entre dois dispositivos no grafo
+void adicionarAresta(ListaDeAdjacencia* grafo, int origem, int destino) {
+    // Adiciona a aresta do dispositivo de origem para o dispositivo de destino
+    Vertice* novoVertice = (Vertice*)malloc(sizeof(Vertice));
+    if (novoVertice == NULL) {
+        perror("Falha na alocação de memória");
+        exit(EXIT_FAILURE);
+    }
+    novoVertice->id = destino;
+    novoVertice->prox = grafo[origem].inicio;
+    grafo[origem].inicio = novoVertice;
+
+    // Adiciona a aresta na direção oposta para garantir a bidirecionalidade
+    novoVertice = (Vertice*)malloc(sizeof(Vertice));
+    if (novoVertice == NULL) {
+        perror("Falha na alocação de memória");
+        exit(EXIT_FAILURE);
+    }
+    novoVertice->id = origem;
+    novoVertice->prox = grafo[destino].inicio;
+    grafo[destino].inicio = novoVertice;
+}
+
+// Função de busca em profundidade para encontrar um caminho entre dois dispositivos
+bool buscaEmProfundidade(ListaDeAdjacencia* grafo, int atual, int alvo, bool* visitado, int* caminho, int* pos) {
+    visitado[atual] = true; // Marca o dispositivo atual como visitado
+    caminho[(*pos)++] = atual; // Adiciona o dispositivo ao caminho
+
+    if (atual == alvo) { // Se o dispositivo atual é o alvo, retorna true
+        return true;
+    }
+
+    // Percorre os dispositivos adjacentes
+    Vertice* adj = grafo[atual].inicio;
+    while (adj != NULL) {
+        if (!visitado[adj->id]) { // Se o dispositivo adjacente não foi visitado
+            if (buscaEmProfundidade(grafo, adj->id, alvo, visitado, caminho, pos)) {
+                return true; // Retorna true se encontrar o alvo
+            }
+        }
+        adj = adj->prox; // Passa para o próximo dispositivo adjacente
+    }
+
+    (*pos)--; // Remove o dispositivo atual do caminho
+    return false; // Retorna false se não encontrar o alvo
+}
+
+// Função para encontrar os componentes conectados no grafo
+void encontrarComponentes(ListaDeAdjacencia* grafo, bool* visitado, int* componente, int idComponente) {
+    for (int i = 0; i < DISPOSITIVOS; i++) {
+        if (!visitado[i]) { // Se o dispositivo não foi visitado
+            int pos = 0;
+            int caminho[DISPOSITIVOS];
+            buscaEmProfundidade(grafo, i, -1, visitado, caminho, &pos); // Realiza a busca em profundidade
+            for (int j = 0; j < pos; j++) {
+                componente[caminho[j]] = idComponente; // Marca os dispositivos do componente
+            }
+            idComponente++; // Incrementa o identificador do componente
+        }
+    }
+}
+
+// Função para encontrar a distância mínima entre dois dispositivos (se pertencem a componentes diferentes)
+int encontrarDistanciaMinima(int* componente, int origem, int destino) {
+    return (componente[origem] != componente[destino]) ? 1 : 0; // Retorna 1 se os dispositivos estão em componentes diferentes, caso contrário, 0
+}
+
+int main() {
+    srand(time(0)); // Inicializa o gerador de números aleatórios
+
+    ListaDeAdjacencia grafo[DISPOSITIVOS];
+    for (int i = 0; i < DISPOSITIVOS; i++) {
+        grafo[i].inicio = NULL; // Inicializa a lista de adjacência de cada dispositivo
+    }
+
+    // Gera conexões aleatórias entre dispositivos
+    for (int i = 0; i < NOS_DE_CONEXAO; i++) {
+        int de = rand() % DISPOSITIVOS;
+        int para = rand() % DISPOSITIVOS;
+        if (de != para) { // Evita conexões consigo mesmo
+            adicionarAresta(grafo, de, para);
+        }
+    }
+
+    // Imprime as arestas geradas
+    printf("Arestas geradas:\n");
+    for (int i = 0; i < DISPOSITIVOS; i++) {
+        Vertice* adj = grafo[i].inicio;
+        printf("Dispositivo %d:", i); // Corrigido para "Dispositivo"
+        while (adj != NULL) {
+            printf(" %d", adj->id);
+            adj = adj->prox;
+        }
+        printf("\n");
+    }
+
+    // Solicita ao usuário os dispositivos de origem e destino
+    int origem, destino;
+    printf("Digite o dispositivo de origem: ");
+    if (scanf("%d", &origem) != 1 || origem < 0 || origem >= DISPOSITIVOS) {
+        fprintf(stderr, "Entrada inválida para o dispositivo de origem.\n");
+        return EXIT_FAILURE;
+    }
+
+    printf("Digite o dispositivo de destino: ");
+    if (scanf("%d", &destino) != 1 || destino < 0 || destino >= DISPOSITIVOS) {
+        fprintf(stderr, "Entrada inválida para o dispositivo de destino.\n");
+        return EXIT_FAILURE;
+    }
+
+    bool visitado[DISPOSITIVOS] = {false}; // Inicializa o array de visitados
+    int caminho[DISPOSITIVOS];
+    int pos = 0;
+
+    // Realiza a busca em profundidade para encontrar um caminho entre origem e destino
+    if (buscaEmProfundidade(grafo, origem, destino, visitado, caminho, &pos)) {
+        printf("Caminho encontrado: ");
+        for (int i = 0; i < pos; i++) {
+            printf("%d ", caminho[i]);
+        }
+        printf("\n");
+    } else {
+        printf("Nenhum caminho encontrado entre %d e %d.\n", origem, destino);
+
+        // Re-inicializa o array de visitados
+        for (int i = 0; i < DISPOSITIVOS; i++) {
+            visitado[i] = false;
+        }
+
+        // Encontra e marca os componentes conectados
+        int componente[DISPOSITIVOS];
+        for (int i = 0; i < DISPOSITIVOS; i++) {
+            componente[i] = -1;
+        }
+        encontrarComponentes(grafo, visitado, componente, 0);
+
+        // Calcula e imprime a quantidade de conexões necessárias para conectar os dispositivos
+        int conexoesNecessarias = encontrarDistanciaMinima(componente, origem, destino);
+        printf("Para conectar os dispositivos, é necessária(s) %d conexão(ões).\n", conexoesNecessarias);
+    }
+
+    // Libera a memória alocada
+    for (int i = 0; i < DISPOSITIVOS; i++) {
+        Vertice* adj = grafo[i].inicio;
+        while (adj != NULL) {
+            Vertice* temp = adj;
+            adj = adj->prox;
+            free(temp);
+        }
+    }
+
+    return 0;
+}
